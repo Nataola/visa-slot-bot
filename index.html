@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Заявка на визовый слот</title>
+
+  <!-- Telegram Mini App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Notion-подобный шрифт -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            ink:    '#37352f', // почти-чёрный текст Notion
+            paper:  '#ffffff',
+            line:   '#e9e9e7', // тонкие линии
+            line2:  '#ededec',
+            muted:  '#787774',
+            faint:  '#9b9a97',
+            subtle: '#f7f7f5',
+            danger: '#e03e3e',
+          },
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Helvetica Neue', 'Arial', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    html, body { background: #ffffff; }
+    body {
+      font-feature-settings: "cv11", "ss01";
+      letter-spacing: -0.01em;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Плавное появление шагов */
+    .step { animation: fade .28s ease; }
+    @keyframes fade {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Поля ввода в стиле Notion */
+    .fld {
+      width: 100%;
+      background: #ffffff;
+      border: 1px solid #e9e9e7;
+      border-radius: 10px;
+      padding: 11px 13px;
+      font-size: 15px;
+      color: #37352f;
+      transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    .fld::placeholder { color: #b9b8b4; }
+    .fld:focus {
+      outline: none;
+      border-color: #37352f;
+      box-shadow: 0 0 0 3px rgba(55,53,47,0.06);
+    }
+    .fld.invalid {
+      border-color: #d9b3ac;
+      box-shadow: none;
+      background: #fdfaf9;
+    }
+
+    /* Select со своей стрелкой */
+    select.fld {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23787774' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 38px;
+      cursor: pointer;
+    }
+    select.fld:required:invalid { color: #b9b8b4; } /* плейсхолдер-опция серым */
+
+    /* Сегментированный контрол (гендер) */
+    .seg {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 1fr;
+      gap: 6px;
+      background: #f7f7f5;
+      border: 1px solid #e9e9e7;
+      border-radius: 10px;
+      padding: 4px;
+    }
+    .seg button {
+      border: none;
+      background: transparent;
+      border-radius: 7px;
+      padding: 9px 6px;
+      font-size: 14px;
+      font-weight: 500;
+      color: #787774;
+      cursor: pointer;
+      transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+    }
+    .seg button[aria-pressed="true"] {
+      background: #ffffff;
+      color: #37352f;
+      box-shadow: 0 1px 2px rgba(15,15,15,0.06);
+    }
+    .seg.invalid { border-color: #d9b3ac; box-shadow: none; }
+
+    /* Первичная кнопка */
+    .btn-primary {
+      width: 100%;
+      background: #37352f;
+      color: #ffffff;
+      border: none;
+      border-radius: 10px;
+      padding: 13px 16px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .15s ease, transform .05s ease;
+    }
+    .btn-primary:active { transform: scale(0.99); }
+    .btn-primary:disabled { opacity: .4; cursor: default; }
+
+    .btn-ghost {
+      background: transparent;
+      border: none;
+      color: #787774;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 10px;
+    }
+
+    .btn-outline {
+      width: 100%;
+      background: #ffffff;
+      border: 1px solid #e9e9e7;
+      border-radius: 10px;
+      padding: 13px 16px;
+      font-size: 15px;
+      font-weight: 600;
+      color: #37352f;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .btn-outline:active { background: #f7f7f5; }
+
+    .err { color: #b06a60; font-size: 12.5px; margin-top: 6px; min-height: 0; }
+
+    /* Точечный прогресс */
+    .steps { position: relative; }
+    .steps-track { position: absolute; left: 6px; right: 6px; top: 6px; height: 2px; background: #ededec; }
+    .steps-fill { height: 100%; background: #37352f; width: 0; transition: width .3s ease; }
+    .steps-row { position: relative; display: flex; justify-content: space-between; }
+    .node { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+    .node-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #ededec; box-shadow: 0 0 0 3px #ffffff;
+      transition: background .3s ease;
+    }
+    .node.done .node-dot { background: #37352f; }
+    .node-lbl { font-size: 10.5px; font-weight: 500; color: #9b9a97; transition: color .3s ease; }
+    .node.done .node-lbl { color: #37352f; }
+
+    /* Чекбокс согласия */
+    .chk {
+      width: 20px; height: 20px; border: 1.5px solid #d3d2ce; border-radius: 6px;
+      display:flex; align-items:center; justify-content:center; flex: 0 0 auto;
+      transition: background .15s ease, border-color .15s ease; cursor: pointer;
+    }
+    .chk[data-on="true"] { background:#37352f; border-color:#37352f; }
+    .chk svg { opacity: 0; transition: opacity .15s ease; }
+    .chk[data-on="true"] svg { opacity: 1; }
+
+    .spinner {
+      width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.35);
+      border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hint { color:#9b9a97; font-size:12.5px; margin-top:6px; }
+    label.lbl { display:block; font-size:13px; font-weight:600; color:#37352f; margin-bottom:8px; }
+  </style>
+</head>
+
+<body class="font-sans text-ink">
+  <div class="max-w-md mx-auto min-h-screen flex flex-col px-5 pb-8">
+
+    <!-- Точечный прогресс (на всех экранах) -->
+    <header class="pt-6 pb-5">
+      <div class="steps">
+        <div class="steps-track"><div class="steps-fill" id="stepsFill"></div></div>
+        <div class="steps-row" id="stepsRow"></div>
+      </div>
+    </header>
+
+    <main id="main" class="flex-1 flex flex-col">
+
+      <!-- ШАГ 0 — Приветствие / согласие -->
+      <section class="step flex-1 flex flex-col" data-step="welcome">
+        <div class="flex-1 flex flex-col justify-center py-10">
+          <h1 class="text-[26px] font-bold leading-tight mb-3">Слот в визовый центр Франции</h1>
+          <p class="text-[15px] text-muted leading-relaxed mb-6">
+            Заполните заявку — мы подберём ближайший доступный слот к дате вылета
+            и пришлём уведомление о готовности.
+          </p>
+
+          <div class="rounded-xl border border-line bg-subtle p-4 mb-6">
+            <p class="text-[13px] font-semibold mb-1.5">Сбор персональных данных</p>
+            <p class="text-[13px] text-muted leading-relaxed">
+              Для поиска и записи на слот нам нужны ваши паспортные и контактные данные.
+              Мы используем их только для оформления заявки.
+            </p>
+          </div>
+
+          <button type="button" id="consentRow" class="flex items-start gap-3 text-left mb-2">
+            <span class="chk" id="consentBox" data-on="false" aria-hidden="true">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </span>
+            <span class="text-[13.5px] text-ink leading-snug pt-0.5">
+              Я согласен(а) на обработку персональных данных для целей оформления заявки
+            </span>
+          </button>
+          <p class="err ml-8" id="consentErr"></p>
+        </div>
+
+        <button type="button" class="btn-primary" data-next>Продолжить</button>
+      </section>
+
+      <!-- ШАГ 1 — Поездка -->
+      <section class="step hidden" data-step="1">
+        <h2 class="text-[20px] font-bold mb-1 mt-1">Поездка</h2>
+        <p class="text-[14px] text-muted mb-6">Куда, когда и по какой визе вы планируете ехать.</p>
+
+        <div class="space-y-5">
+          <div data-field="city">
+            <label class="lbl">Город подачи</label>
+            <select class="fld" id="city" required>
+              <option value="" disabled selected>Выберите город</option>
+              <option>Москва</option>
+              <option>Санкт-Петербург</option>
+              <option>Екатеринбург</option>
+              <option>Калининград</option>
+              <option>Краснодар</option>
+              <option>Казань</option>
+              <option>Новосибирск</option>
+              <option>Ростов-на-Дону</option>
+            </select>
+            <p class="err"></p>
+          </div>
+
+          <div data-field="visa">
+            <label class="lbl">Тип визы</label>
+            <select class="fld" id="visa" required>
+              <option value="" disabled selected>Выберите тип визы</option>
+              <option>Туристическая краткосрочная</option>
+              <option>Туристическая долгосрочная</option>
+            </select>
+            <p class="err"></p>
+          </div>
+
+          <div data-field="tripFrom">
+            <label class="lbl">Дата поездки (вылет)</label>
+            <input class="fld" id="tripFrom" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" />
+            <p class="hint">Формат: ДД.ММ.ГГГГ. Слот ищем близко к этой дате.</p>
+            <p class="err"></p>
+          </div>
+        </div>
+
+        <div class="mt-8 space-y-2">
+          <button type="button" class="btn-primary" data-next>Далее</button>
+          <button type="button" class="btn-ghost w-full" data-back>Назад</button>
+        </div>
+      </section>
+
+      <!-- ШАГ 2 — Контакты -->
+      <section class="step hidden" data-step="2">
+        <h2 class="text-[20px] font-bold mb-1 mt-1">Личные данные</h2>
+        <p class="text-[14px] text-muted mb-6">Как с вами связаться и на кого оформляем.</p>
+
+        <div class="space-y-5">
+          <div data-field="phone">
+            <label class="lbl">Мобильный телефон</label>
+            <input class="fld" id="phone" inputmode="tel" placeholder="+7 900 123-45-67" maxlength="18" />
+            <p class="hint">Формат: +7 900 123-45-67</p>
+            <p class="err"></p>
+          </div>
+
+          <div data-field="gender">
+            <label class="lbl">Гендер</label>
+            <div class="seg" id="genderSeg" role="group">
+              <button type="button" data-val="Мужской" aria-pressed="false">Мужской</button>
+              <button type="button" data-val="Женский" aria-pressed="false">Женский</button>
+            </div>
+            <input type="hidden" id="gender" />
+            <p class="err"></p>
+          </div>
+
+          <div data-field="nationality">
+            <label class="lbl">Национальность</label>
+            <select class="fld" id="nationality" required>
+              <option value="" disabled selected>Выберите национальность</option>
+              <option>Россия</option>
+              <option>Беларусь</option>
+              <option>Казахстан</option>
+              <option>Армения</option>
+            </select>
+            <p class="err"></p>
+          </div>
+        </div>
+
+        <div class="mt-8 space-y-2">
+          <button type="button" class="btn-primary" data-next>Далее</button>
+          <button type="button" class="btn-ghost w-full" data-back>Назад</button>
+        </div>
+      </section>
+
+      <!-- ШАГ 3 — Загранпаспорт -->
+      <section class="step hidden" data-step="3">
+        <h2 class="text-[20px] font-bold mb-1 mt-1">Загранпаспорт</h2>
+        <p class="text-[14px] text-muted mb-6">Данные документа, по которому оформляем визу.</p>
+
+        <div class="space-y-5">
+          <div data-field="passportNo">
+            <label class="lbl">Номер загранпаспорта</label>
+            <input class="fld" id="passportNo" placeholder="12 3456789" maxlength="10" />
+            <p class="hint" id="passportHint">9 цифр, формат: 12 3456789</p>
+            <p class="err"></p>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div data-field="passportIssue">
+              <label class="lbl">Дата выдачи</label>
+              <input class="fld" id="passportIssue" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" />
+              <p class="err"></p>
+            </div>
+            <div data-field="passportExpiry">
+              <label class="lbl">Действует до</label>
+              <input class="fld" id="passportExpiry" inputmode="numeric" placeholder="ДД.ММ.ГГГГ" maxlength="10" />
+              <p class="err"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-8 space-y-2">
+          <button type="button" class="btn-primary" data-next>Проверить заявку</button>
+          <button type="button" class="btn-ghost w-full" data-back>Назад</button>
+        </div>
+      </section>
+
+      <!-- ШАГ 4 — Проверка -->
+      <section class="step hidden" data-step="4">
+        <h2 class="text-[20px] font-bold mb-1 mt-1">Проверьте заявку</h2>
+        <p class="text-[14px] text-muted mb-6">Убедитесь, что всё верно, перед отправкой.</p>
+
+        <div id="summary" class="rounded-xl border border-line divide-y divide-line2 overflow-hidden"></div>
+
+        <div class="mt-8 space-y-2">
+          <button type="button" class="btn-primary" data-next>Всё верно, к оплате</button>
+          <button type="button" class="btn-ghost w-full" data-back>Изменить</button>
+        </div>
+      </section>
+
+      <!-- ШАГ 5 — Оплата (заглушка) -->
+      <section class="step hidden" data-step="5">
+        <h2 class="text-[20px] font-bold mb-1 mt-1">Оплата сбора</h2>
+        <p class="text-[14px] text-muted mb-6">Разовый визовый сбор за подбор и запись на слот.</p>
+
+        <div class="rounded-xl border border-line bg-subtle p-5 mb-6 flex items-center justify-between">
+          <span class="text-[14px] text-muted">Визовый сбор</span>
+          <div class="text-right">
+            <span id="feeAmount" class="text-[22px] font-bold block leading-tight">3 500 ₽</span>
+            <span class="text-[12px] text-faint">35 €</span>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <button type="button" class="btn-primary flex items-center justify-center gap-2" data-pay="СБП">
+            Оплатить через СБП
+          </button>
+          <button type="button" class="btn-outline" data-pay="Карта">
+            Оплатить картой
+          </button>
+        </div>
+        <p class="hint text-center mt-4">Оплата обрабатывается на защищённой странице.</p>
+
+        <div class="mt-6">
+          <button type="button" class="btn-ghost w-full" data-back>Назад</button>
+        </div>
+      </section>
+
+      <!-- ШАГ 6 — Готово / статус -->
+      <section class="step hidden flex-1 flex flex-col" data-step="6">
+        <div class="flex-1 flex flex-col justify-center py-10">
+          <h1 class="text-[24px] font-bold leading-tight mb-3">Заявка принята</h1>
+          <p class="text-[15px] text-muted leading-relaxed mb-8">
+            Оплата прошла успешно. Мы начали поиск слота — ожидайте уведомления в этом чате.
+          </p>
+
+          <!-- Что будет дальше -->
+          <div class="space-y-0">
+            <div class="flex gap-3.5">
+              <div class="flex flex-col items-center">
+                <div class="w-2.5 h-2.5 rounded-full bg-ink mt-1.5"></div>
+                <div class="w-px flex-1 bg-line2"></div>
+              </div>
+              <div class="pb-6">
+                <p class="text-[14px] font-semibold">Ищем слот</p>
+                <p class="text-[13px] text-muted leading-relaxed">Подбираем ближайшее время к вашим датам поездки.</p>
+              </div>
+            </div>
+            <div class="flex gap-3.5">
+              <div class="flex flex-col items-center">
+                <div class="w-2.5 h-2.5 rounded-full border-2 border-faint mt-1.5"></div>
+                <div class="w-px flex-1 bg-line2"></div>
+              </div>
+              <div class="pb-6">
+                <p class="text-[14px] font-semibold">Пришлём время</p>
+                <p class="text-[13px] text-muted leading-relaxed">Как только слот найден — вы получите уведомление с датой и временем.</p>
+              </div>
+            </div>
+            <div class="flex gap-3.5">
+              <div class="flex flex-col items-center">
+                <div class="w-2.5 h-2.5 rounded-full border-2 border-faint mt-1.5"></div>
+              </div>
+              <div>
+                <p class="text-[14px] font-semibold">Обратная связь</p>
+                <p class="text-[13px] text-muted leading-relaxed">После записи пришлём ссылку, чтобы оставить отзыв.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button type="button" class="btn-primary" id="finishBtn">Готово</button>
+        <p class="hint text-center mt-3" id="finishNote"></p>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+  /* ============================================================
+     Telegram Mini App — заявка на визовый слот
+     Отправка данных: Telegram.WebApp.sendData(JSON)
+     ============================================================ */
+
+  const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+  const inTelegram = !!(tg && tg.initData !== undefined && tg.platform && tg.platform !== 'unknown');
+
+  if (tg) {
+    tg.ready();
+    tg.expand();
+  }
+
+  // --- Навигация по шагам ---
+  const ORDER = ['welcome', '1', '2', '3', '4', '5', '6'];
+  const STEP_LABELS = ['start', '1', '2', '3', '4', '5', 'final'];
+  let current = 'welcome';
+
+  // Собираем точечный прогресс
+  const stepsRow = document.getElementById('stepsRow');
+  const stepsFill = document.getElementById('stepsFill');
+  ORDER.forEach((s, i) => {
+    const n = document.createElement('div');
+    n.className = 'node';
+    n.dataset.node = s;
+    n.innerHTML = `<span class="node-dot"></span><span class="node-lbl">${STEP_LABELS[i]}</span>`;
+    stepsRow.appendChild(n);
+  });
+
+  function show(step) {
+    document.querySelectorAll('.step').forEach(s => s.classList.add('hidden'));
+    const el = document.querySelector(`[data-step="${step}"]`);
+    el.classList.remove('hidden');
+    // перезапустить анимацию
+    el.classList.remove('step'); void el.offsetWidth; el.classList.add('step');
+    current = step;
+
+    // Точечный прогресс: пройденные и текущий — тёмные
+    const idx = ORDER.indexOf(step);
+    document.querySelectorAll('.node').forEach((n, i) => n.classList.toggle('done', i <= idx));
+    stepsFill.style.width = `${(idx / (ORDER.length - 1)) * 100}%`;
+
+    // Нативная кнопка "Назад" Telegram
+    if (tg && tg.BackButton) {
+      if (step === 'welcome' || step === '6') tg.BackButton.hide();
+      else tg.BackButton.show();
+    }
+    window.scrollTo(0, 0);
+  }
+
+  function goNext() {
+    const i = ORDER.indexOf(current);
+    if (i < ORDER.length - 1) show(ORDER[i + 1]);
+  }
+  function goBack() {
+    const i = ORDER.indexOf(current);
+    if (i > 0) show(ORDER[i - 1]);
+  }
+
+  if (tg && tg.BackButton) tg.BackButton.onClick(goBack);
+
+  // --- Согласие (шаг 0) ---
+  let consent = false;
+  const consentBox = document.getElementById('consentBox');
+  const consentErr = document.getElementById('consentErr');
+  document.getElementById('consentRow').addEventListener('click', () => {
+    consent = !consent;
+    consentBox.setAttribute('data-on', String(consent));
+    if (consent) consentErr.textContent = '';
+  });
+
+  // --- Гендер (сегментированный контрол) ---
+  const genderSeg = document.getElementById('genderSeg');
+  const genderInput = document.getElementById('gender');
+  genderSeg.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      genderSeg.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', 'false'));
+      b.setAttribute('aria-pressed', 'true');
+      genderInput.value = b.dataset.val;
+      genderSeg.classList.remove('invalid');
+      clearFieldError('gender');
+    });
+  });
+
+  // --- Автоформат полей ---
+  function digits(v) { return v.replace(/\D/g, ''); }
+
+  function maskDate(el) {
+    el.addEventListener('input', () => {
+      const d = digits(el.value).slice(0, 8);
+      let out = d.slice(0, 2);
+      if (d.length >= 3) out += '.' + d.slice(2, 4);
+      if (d.length >= 5) out += '.' + d.slice(4, 8);
+      el.value = out;
+      clearFieldError(el.closest('[data-field]').dataset.field);
+    });
+  }
+  ['tripFrom', 'passportIssue', 'passportExpiry'].forEach(id => maskDate(document.getElementById(id)));
+
+  // Телефон: + и цифры, лёгкое форматирование
+  const phoneEl = document.getElementById('phone');
+  phoneEl.addEventListener('input', () => {
+    let d = digits(phoneEl.value);
+    if (d.startsWith('8')) d = '7' + d.slice(1);
+    d = d.slice(0, 11);
+    let out = '+';
+    if (d.length > 0) out += d.slice(0, 1);
+    if (d.length > 1) out += ' ' + d.slice(1, 4);
+    if (d.length > 4) out += ' ' + d.slice(4, 7);
+    if (d.length > 7) out += '-' + d.slice(7, 9);
+    if (d.length > 9) out += '-' + d.slice(9, 11);
+    phoneEl.value = out;
+    clearFieldError('phone');
+  });
+
+  // --- Загранпаспорт: формат зависит от гражданства ---
+  // Формат по умолчанию — на случай, если гражданство ещё не выбрано.
+  // termMin/termMax — допустимый срок действия паспорта в годах (выдан → действует до).
+  // У всех четырёх стран биометрический загран максимум 10 лет, есть варианты на 5 лет.
+  const PASSPORT_FORMATS = {
+    'Россия':    { re: /^\d{2}\s\d{7}$/,  placeholder: '12 3456789', hint: '9 цифр, формат: 12 3456789', maxlength: 10, termMin: 5, termMax: 10 },
+    'Беларусь':  { re: /^[A-Z]{2}\d{7}$/, placeholder: 'MP1234567',  hint: '2 буквы + 7 цифр, формат: MP1234567', maxlength: 9, termMin: 5, termMax: 10 },
+    'Казахстан': { re: /^N\d{8}$/,        placeholder: 'N12345678',  hint: 'буква N + 8 цифр, формат: N12345678', maxlength: 9, termMin: 5, termMax: 10 },
+    'Армения':   { re: /^[A-Z]{2}\d{7}$/, placeholder: 'AN1234567',  hint: '2 буквы + 7 цифр, формат: AN1234567', maxlength: 9, termMin: 5, termMax: 10 },
+  };
+  function passportFmt() {
+    return PASSPORT_FORMATS[document.getElementById('nationality').value] || PASSPORT_FORMATS['Россия'];
+  }
+
+  const passEl = document.getElementById('passportNo');
+  const passHint = document.getElementById('passportHint');
+
+  function applyPassportFormat() {
+    const f = passportFmt();
+    passEl.value = '';
+    passEl.placeholder = f.placeholder;
+    passEl.maxLength = f.maxlength;
+    passHint.textContent = f.hint;
+    clearFieldError('passportNo');
+  }
+
+  // Ввод паспорта: РФ — цифры «12 3456789», прочие — латиница+цифры в верхнем регистре
+  passEl.addEventListener('input', () => {
+    const nat = document.getElementById('nationality').value;
+    if (nat === 'Россия') {
+      const d = digits(passEl.value).slice(0, 9);
+      passEl.value = d.length > 2 ? d.slice(0, 2) + ' ' + d.slice(2) : d;
+    } else {
+      passEl.value = passEl.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 9);
+    }
+    clearFieldError('passportNo');
+  });
+
+  // Сбрасывать ошибку при выборе в select
+  ['city', 'visa'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => clearFieldError(id));
+  });
+  // Смена гражданства → пересобрать формат паспорта
+  document.getElementById('nationality').addEventListener('change', () => {
+    clearFieldError('nationality');
+    applyPassportFormat();
+  });
+
+  // --- Работа с датами ---
+  function parseDate(str) {
+    const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(str || '');
+    if (!m) return null;
+    const day = +m[1], mon = +m[2], year = +m[3];
+    if (mon < 1 || mon > 12 || day < 1 || day > 31 || year < 1900 || year > 2100) return null;
+    const dt = new Date(year, mon - 1, day);
+    if (dt.getDate() !== day || dt.getMonth() !== mon - 1 || dt.getFullYear() !== year) return null;
+    dt.setHours(0, 0, 0, 0);
+    return dt;
+  }
+  function today() { const t = new Date(); t.setHours(0, 0, 0, 0); return t; }
+
+  // --- Ошибки полей ---
+  function setFieldError(field, msg) {
+    const wrap = document.querySelector(`[data-field="${field}"]`);
+    if (!wrap) return;
+    const p = wrap.querySelector('.err');
+    if (p) p.textContent = msg;
+    const control = wrap.querySelector('.fld');
+    if (control) control.classList.add('invalid');
+    if (field === 'gender') document.getElementById('genderSeg').classList.add('invalid');
+  }
+  function clearFieldError(field) {
+    const wrap = document.querySelector(`[data-field="${field}"]`);
+    if (!wrap) return;
+    const p = wrap.querySelector('.err');
+    if (p) p.textContent = '';
+    const control = wrap.querySelector('.fld');
+    if (control) control.classList.remove('invalid');
+    if (field === 'gender') document.getElementById('genderSeg').classList.remove('invalid');
+  }
+
+  // --- Валидаторы ---
+  // Возвращают '' если ок, иначе текст ошибки.
+  const V = {
+    city:    () => document.getElementById('city').value ? '' : 'Выберите город подачи',
+    visa:    () => document.getElementById('visa').value ? '' : 'Выберите тип визы',
+    nationality: () => document.getElementById('nationality').value ? '' : 'Выберите национальность',
+    gender:  () => genderInput.value ? '' : 'Выберите гендер',
+
+    tripFrom: () => {
+      const v = document.getElementById('tripFrom').value;
+      if (!v) return 'Введите дату';
+      const d = parseDate(v);
+      if (!d) return 'Неверная дата (ДД.ММ.ГГГГ)';
+      if (d < today()) return 'Дата уже прошла';
+      return '';
+    },
+
+    phone: () => {
+      const v = document.getElementById('phone').value;
+      if (!v.trim()) return 'Введите номер телефона';
+      const d = digits(v);
+      if (d.length < 11) return 'Проверьте формат номера';
+      return '';
+    },
+
+    passportNo: () => {
+      const v = document.getElementById('passportNo').value.trim();
+      if (!v) return 'Введите номер паспорта';
+      const f = passportFmt();
+      if (!f.re.test(v)) return 'Формат: ' + f.placeholder;
+      return '';
+    },
+    passportIssue: () => {
+      const v = document.getElementById('passportIssue').value;
+      if (!v) return 'Введите дату';
+      const d = parseDate(v);
+      if (!d) return 'Неверная дата (ДД.ММ.ГГГГ)';
+      if (d > today()) return 'Дата выдачи в будущем';
+      return '';
+    },
+    passportExpiry: () => {
+      const v = document.getElementById('passportExpiry').value;
+      if (!v) return 'Введите дату';
+      const d = parseDate(v);
+      if (!d) return 'Неверная дата (ДД.ММ.ГГГГ)';
+      if (d <= today()) return 'Срок действия истёк';
+      const issue = parseDate(document.getElementById('passportIssue').value);
+      if (issue) {
+        if (d <= issue) return 'Раньше даты выдачи';
+        // Срок действия паспорта должен укладываться в допустимый диапазон страны
+        const f = passportFmt();
+        const maxDate = new Date(issue); maxDate.setFullYear(maxDate.getFullYear() + f.termMax);
+        if (d > maxDate) return `Срок больше ${f.termMax} лет — проверьте даты`;
+        const minDate = new Date(issue); minDate.setFullYear(minDate.getFullYear() + f.termMin);
+        if (d < minDate) return `Срок меньше ${f.termMin} лет — проверьте даты`;
+      }
+      return '';
+    },
+  };
+
+  const STEP_FIELDS = {
+    '1': ['city', 'visa', 'tripFrom'],
+    '2': ['phone', 'gender', 'nationality'],
+    '3': ['passportNo', 'passportIssue', 'passportExpiry'],
+  };
+
+  function validateStep(step) {
+    const fields = STEP_FIELDS[step];
+    if (!fields) return true;
+    let ok = true;
+    let firstBad = null;
+    fields.forEach(f => {
+      const msg = V[f]();
+      if (msg) {
+        setFieldError(f, msg);
+        if (!firstBad) firstBad = f;
+        ok = false;
+      } else {
+        clearFieldError(f);
+      }
+    });
+    if (!ok && tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+    if (firstBad) {
+      const el = document.querySelector(`[data-field="${firstBad}"]`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    return ok;
+  }
+
+  // --- Сбор данных заявки ---
+  function collectData() {
+    return {
+      city: document.getElementById('city').value,
+      visa_type: document.getElementById('visa').value,
+      trip_date: document.getElementById('tripFrom').value,
+      phone: document.getElementById('phone').value,
+      gender: genderInput.value,
+      nationality: document.getElementById('nationality').value,
+      passport_number: document.getElementById('passportNo').value,
+      passport_issue: document.getElementById('passportIssue').value,
+      passport_expiry: document.getElementById('passportExpiry').value,
+    };
+  }
+
+  // --- Экран проверки ---
+  function buildSummary() {
+    const d = collectData();
+    const rows = [
+      ['Город подачи', d.city],
+      ['Тип визы', d.visa_type],
+      ['Дата вылета', d.trip_date],
+      ['Телефон', d.phone],
+      ['Гендер', d.gender],
+      ['Национальность', d.nationality],
+      ['Загранпаспорт', d.passport_number],
+      ['Выдан', d.passport_issue],
+      ['Действует до', d.passport_expiry],
+    ];
+    document.getElementById('summary').innerHTML = rows.map(([k, v]) => `
+      <div class="flex items-start justify-between gap-4 px-4 py-3">
+        <span class="text-[13px] text-muted flex-shrink-0">${k}</span>
+        <span class="text-[13.5px] font-medium text-right">${v || '—'}</span>
+      </div>`).join('');
+  }
+
+  // --- Кнопки "Далее" ---
+  document.querySelectorAll('[data-next]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (current === 'welcome') {
+        if (!consent) {
+          consentErr.textContent = 'Отметьте согласие, чтобы продолжить';
+          if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+          return;
+        }
+        goNext();
+        return;
+      }
+      if (STEP_FIELDS[current]) {
+        if (!validateStep(current)) return;
+      }
+      if (current === '3') buildSummary(); // перед экраном проверки
+      goNext();
+    });
+  });
+
+  document.querySelectorAll('[data-back]').forEach(btn => btn.addEventListener('click', goBack));
+
+  // --- Оплата (заглушка) ---
+  let paymentMethod = null;
+  document.querySelectorAll('[data-pay]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      paymentMethod = btn.dataset.pay;
+      const original = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Обработка…';
+      // Имитация оплаты — здесь позже будет реальная ссылка СБП/эквайринг
+      setTimeout(() => {
+        if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+        btn.disabled = false;
+        btn.innerHTML = original;
+        goNext(); // → экран "Заявка принята"
+      }, 1200);
+    });
+  });
+
+  // --- Отправка заявки боту ---
+  document.getElementById('finishBtn').addEventListener('click', () => {
+    const payload = {
+      ...collectData(),
+      payment_method: paymentMethod,
+      fee_rub: feeRub,
+      status: 'paid',
+      submitted_at: new Date().toISOString(),
+    };
+    if (inTelegram && typeof tg.sendData === 'function') {
+      tg.sendData(JSON.stringify(payload)); // бот получит заявку; окно закроется
+    } else {
+      // Вне Telegram (превью в браузере) — просто покажем результат
+      console.log('Заявка:', payload);
+      document.getElementById('finishNote').textContent =
+        'Демо-режим: данные выведены в консоль. В Telegram заявка уйдёт боту.';
+      document.getElementById('finishBtn').disabled = true;
+    }
+  });
+
+  // --- Визовый сбор: 35 € по курсу ЦБ РФ + 5% ---
+  const EUR_FEE = 35, FEE_MARKUP = 1.05;
+  let feeRub = 3500; // запасное значение, если курс не загрузился
+  const feeAmountEl = document.getElementById('feeAmount');
+  (async function loadFee() {
+    try {
+      const r = await fetch('https://www.cbr-xml-daily.ru/daily_json.js');
+      const j = await r.json();
+      const rate = j.Valute.EUR.Value; // рублей за 1 евро
+      feeRub = Math.round((EUR_FEE * rate * FEE_MARKUP) / 10) * 10;
+    } catch (e) { /* оставим запасное значение */ }
+    feeAmountEl.textContent = feeRub.toLocaleString('ru-RU') + ' ₽';
+  })();
+
+  // старт
+  show('welcome');
+  </script>
+</body>
+</html>
